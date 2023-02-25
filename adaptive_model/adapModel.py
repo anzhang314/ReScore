@@ -115,15 +115,12 @@ def adap_reweight_step(args,adp_model, train_loader, lambda1, model, epoch_num, 
 
 
 
-
-# test the above model
 if __name__ == '__main__':
     # import TensorDataset
     import random
     import torch.utils.data as dataset
-    # 创建一个3层MLP，用softmax函数保证输出是[input_size,1] 的表示概率的向量, 包括权重初始化
     X = torch.randn(800, 10)
-    # 设置随机数种子函数
+    # random seed function
     def set_random_seed(seed):
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
@@ -135,7 +132,6 @@ if __name__ == '__main__':
 
     model = adaptiveMLP(100, input_size=X.shape[1], hidden_size=X.shape[1], output_size=1)
     W_star = torch.randn(10, 10)
-    # 调用上述函数，进行模型的训练
     M = adap_reweight_step(model, train_loader1, lambda1=0.1, notears_model=model, epoch_num=1000, lrate = 0.001)
     print("finished")
     # print(M)
