@@ -9,7 +9,6 @@ import tqdm as tqdm
 
 
 class adaptiveMLP(nn.Module):
-    # TODO: implementation ：平滑处理设计
     def __init__(self, batch, input_size, hidden_size, output_size, temperature, bias=True,device='cpu',linear=False):
         super(adaptiveMLP, self).__init__()
         self.linear=linear
@@ -20,17 +19,13 @@ class adaptiveMLP(nn.Module):
         self.fc2 = nn.Linear(hidden_size, output_size, bias=bias)
         self.sigmoid = nn.Sigmoid()
         self.softmax = nn.Softmax(dim=0)
-        # 定义带有温度系数的softmax
+        # temperature softmax
         self.softmax_temp = nn.Softmax(dim=0)
-        # 将 noise = tf.random_uniform(tf.shape(logits), seed=11) 从tensorflow翻译成pytorch
-        # noise 是从random uniform distribution中随机抽取的一个tensor
-        # self.noise = torch.rand(batch,1)
+        
         self.eps = torch.tensor(1e-6)
         self.t = temperature
         self.device=device
-        # self.t = 200000
-        # self.norm = nn.L2Norm(p=2, dim=1)
-        # 是否针对relu函数的权重初始化
+        # if init the weight
         nn.init.kaiming_normal_(self.fc1.weight)
         nn.init.kaiming_normal_(self.fc2.weight)
 
@@ -38,29 +33,27 @@ class adaptiveMLP(nn.Module):
     def forward(self, x):
 
         if self.linear:
-            # TODO: linear design
+            # TODO: linear design, incremental learning
             x = self.fc1(x)
+            x = self.softmax_temp(x/self.t)
+            
+            base_distribution = torch.rand(x.shape[0],1).to(self.device)
+            x = x + base_distribution
             x = self.softmax_temp(x/self.t)
         else:
             x = F.relu(self.fc1(x))
-            # x = (self.fc2(x)) + tmp
             x = self.fc2(x)
             x = F.relu(x)
-            # 对x进行减均值除以标准差
-            # x = self.sigmoid(x)
-            # x = x - torch.mean(x)
-            # x = x / torch.std(x)
             gumble_G = torch.rand(x.shape[0],1).to(self.device)
             x = x - torch.log(-torch.log(gumble_G))
             x = self.softmax_temp(x/self.t)
-        # x = torch.abs(x)
-        # x = x/torch.sum(x)
+
         return x
     
     def fc1_l1_reg(self):
         """Take l1 norm of fc1 weight"""
         reg = torch.sum(self.fc1.weight)
-        # reg 取其绝对值
+        # reg abs
         reg = torch.abs(reg)
         return reg
     
@@ -101,8 +94,8 @@ def adap_reweight_step(args,adp_model, train_loader, lambda1, model, epoch_num, 
 
 
             optimizer.zero_grad()
-            reweight_list = adp_model(R**2) # FIXME: 注意这里的输入和在主函数训练的输入的一致性，要么都是R,要么都是X
-            # loss 要加上了l1正则项
+            reweight_list = adp_model(R**2)
+            # loss l1 regularization
             R_list = R**2 if args.modeltype!="grandag" else R
             idx=data[1]
             if args.modeltype!="grandag":
@@ -112,10 +105,7 @@ def adap_reweight_step(args,adp_model, train_loader, lambda1, model, epoch_num, 
             loss.backward()
             optimizer.step()
             loop.set_postfix(adaptive_loss=loss.item())
-            # for param in adp_model.fc1.parameters():
-            #     # 打印梯度
-            #     print(param.grad)
-    #print(reweight_list)
+            
     print(f'avg:{torch.mean(reweight_list)}')
     print(f'max:{torch.max(reweight_list).item()}')
     print(f'min:{torch.min(reweight_list).item()}')
@@ -126,7 +116,7 @@ def adap_reweight_step(args,adp_model, train_loader, lambda1, model, epoch_num, 
 
 
 
-# 测试上述的模型
+# test the above model
 if __name__ == '__main__':
     # import TensorDataset
     import random
